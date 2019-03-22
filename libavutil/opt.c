@@ -71,6 +71,9 @@ static int read_number(const AVOption *o, const void *dst, double *num, int *den
     case AV_OPT_TYPE_INT:
         *intnum = *(int *)dst;
         return 0;
+    case AV_OPT_TYPE_UINT16:
+        *intnum = *(uint16_t*)dst;
+        return 0;
     case AV_OPT_TYPE_CHANNEL_LAYOUT:
     case AV_OPT_TYPE_DURATION:
     case AV_OPT_TYPE_INT64:
@@ -125,6 +128,13 @@ static int write_number(void *obj, const AVOption *o, void *dst, double num, int
     case AV_OPT_TYPE_INT:
         *(int *)dst = llrint(num / den) * intnum;
         break;
+    case AV_OPT_TYPE_UINT16:{
+        float d = num / den;
+        if (intnum == 1 && d == (float)UINT16_MAX) {
+            *(int16_t *)dst = INT16_MAX;
+        } else
+            *(int16_t *)dst = llrint(d) * intnum;
+        break;}
     case AV_OPT_TYPE_DURATION:
     case AV_OPT_TYPE_CHANNEL_LAYOUT:
     case AV_OPT_TYPE_INT64:{
@@ -218,8 +228,9 @@ static int set_string(void *obj, const AVOption *o, const char *val, uint8_t **d
     return *dst ? 0 : AVERROR(ENOMEM);
 }
 
-#define DEFAULT_NUMVAL(opt) ((opt->type == AV_OPT_TYPE_INT64 || \
-                              opt->type == AV_OPT_TYPE_UINT64 || \
+#define DEFAULT_NUMVAL(opt) ((opt->type == AV_OPT_TYPE_UINT16 ||\
+                              opt->type == AV_OPT_TYPE_UINT64 ||\
+                              opt->type == AV_OPT_TYPE_INT64 || \
                               opt->type == AV_OPT_TYPE_CONST || \
                               opt->type == AV_OPT_TYPE_FLAGS || \
                               opt->type == AV_OPT_TYPE_INT)     \
@@ -476,6 +487,7 @@ int av_opt_set(void *obj, const char *name, const char *val, int search_flags)
         return set_string_binary(obj, o, val, dst);
     case AV_OPT_TYPE_FLAGS:
     case AV_OPT_TYPE_INT:
+    case AV_OPT_TYPE_UINT16:
     case AV_OPT_TYPE_INT64:
     case AV_OPT_TYPE_UINT64:
     case AV_OPT_TYPE_FLOAT:
@@ -784,6 +796,9 @@ int av_opt_get(void *obj, const char *name, int search_flags, uint8_t **out_val)
         break;
     case AV_OPT_TYPE_INT:
         ret = snprintf(buf, sizeof(buf), "%d", *(int *)dst);
+        break;
+    case AV_OPT_TYPE_UINT16:
+        ret = snprintf(buf, sizeof(buf), "%"PRIu16, *(uint16_t *)dst);
         break;
     case AV_OPT_TYPE_INT64:
         ret = snprintf(buf, sizeof(buf), "%"PRId64, *(int64_t *)dst);
@@ -1136,6 +1151,9 @@ static void opt_list(void *obj, void *av_log_obj, const char *unit,
             case AV_OPT_TYPE_INT:
                 av_log(av_log_obj, AV_LOG_INFO, "%-12s ", "<int>");
                 break;
+            case AV_OPT_TYPE_UINT16:
+                av_log(av_log_obj, AV_LOG_INFO, "%-12s ", "<uint16>");
+                break;
             case AV_OPT_TYPE_INT64:
                 av_log(av_log_obj, AV_LOG_INFO, "%-12s ", "<int64>");
                 break;
@@ -1202,6 +1220,7 @@ static void opt_list(void *obj, void *av_log_obj, const char *unit,
         if (av_opt_query_ranges(&r, obj, opt->name, AV_OPT_SEARCH_FAKE_OBJ) >= 0) {
             switch (opt->type) {
             case AV_OPT_TYPE_INT:
+            case AV_OPT_TYPE_UINT16:
             case AV_OPT_TYPE_INT64:
             case AV_OPT_TYPE_UINT64:
             case AV_OPT_TYPE_DOUBLE:
@@ -1248,6 +1267,7 @@ static void opt_list(void *obj, void *av_log_obj, const char *unit,
                 break;
             }
             case AV_OPT_TYPE_INT:
+            case AV_OPT_TYPE_UINT16:
             case AV_OPT_TYPE_UINT64:
             case AV_OPT_TYPE_INT64: {
                 const char *def_const = get_opt_const_name(obj, opt->unit, opt->default_val.i64);
@@ -1326,6 +1346,7 @@ void av_opt_set_defaults2(void *s, int mask, int flags)
             case AV_OPT_TYPE_BOOL:
             case AV_OPT_TYPE_FLAGS:
             case AV_OPT_TYPE_INT:
+            case AV_OPT_TYPE_UINT16:
             case AV_OPT_TYPE_INT64:
             case AV_OPT_TYPE_UINT64:
             case AV_OPT_TYPE_DURATION:
@@ -1685,6 +1706,8 @@ static int opt_size(enum AVOptionType type)
     case AV_OPT_TYPE_INT:
     case AV_OPT_TYPE_FLAGS:
         return sizeof(int);
+    case AV_OPT_TYPE_UINT16:
+        return sizeof(uint16_t);
     case AV_OPT_TYPE_DURATION:
     case AV_OPT_TYPE_CHANNEL_LAYOUT:
     case AV_OPT_TYPE_INT64:
@@ -1817,6 +1840,7 @@ int av_opt_query_ranges_default(AVOptionRanges **ranges_arg, void *obj, const ch
     switch (field->type) {
     case AV_OPT_TYPE_BOOL:
     case AV_OPT_TYPE_INT:
+    case AV_OPT_TYPE_UINT16:
     case AV_OPT_TYPE_INT64:
     case AV_OPT_TYPE_UINT64:
     case AV_OPT_TYPE_PIXEL_FMT:
@@ -1905,6 +1929,7 @@ int av_opt_is_set_to_default(void *obj, const AVOption *o)
     case AV_OPT_TYPE_PIXEL_FMT:
     case AV_OPT_TYPE_SAMPLE_FMT:
     case AV_OPT_TYPE_INT:
+    case AV_OPT_TYPE_UINT16:
     case AV_OPT_TYPE_CHANNEL_LAYOUT:
     case AV_OPT_TYPE_DURATION:
     case AV_OPT_TYPE_INT64:

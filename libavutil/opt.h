@@ -238,6 +238,7 @@ enum AVOptionType{
     AV_OPT_TYPE_COLOR,
     AV_OPT_TYPE_CHANNEL_LAYOUT,
     AV_OPT_TYPE_BOOL,
+    AV_OPT_TYPE_UINT16,
 };
 
 /**
