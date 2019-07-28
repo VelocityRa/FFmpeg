@@ -130,14 +130,27 @@ void ff_mjpeg_build_huffman_codes(uint8_t *huff_size, uint16_t *huff_code,
 {
     int i, j, k,nb, code, sym;
 
-    code = 0;
+    /* Zero-initialize huff_size (needed for multiple mappings check below) */
     k = 0;
     for(i=1;i<=16;i++) {
         nb = bits_table[i];
         for(j=0;j<nb;j++) {
             sym = val_table[k++];
-            huff_size[sym] = i;
-            huff_code[sym] = code;
+            huff_size[sym] = 0;
+        }
+    }
+
+    k = 0;
+    code = 0;
+    for(i=1;i<=16;i++) {
+        nb = bits_table[i];
+        for(j=0;j<nb;j++) {
+            sym = val_table[k++];
+            /* If there are multiple mappings to the same sym (bad files), keep the first code */
+            if (huff_size[sym] == 0) {
+                huff_size[sym] = i;
+                huff_code[sym] = code;
+            }
             code++;
         }
         code <<= 1;
