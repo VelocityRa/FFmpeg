@@ -1775,6 +1775,7 @@ static int decode_frame(AVCodecContext *avctx,
     GetByteContext stripsizes;
     GetByteContext stripdata;
     int retry_for_subifd, retry_for_page;
+    int is_dng;
 
     bytestream2_init(&s->gb, avpkt->data, avpkt->size);
 
@@ -1843,6 +1844,10 @@ again:
         goto again;
     }
 
+    /* At this point we've decided on which (Sub)IFD to process */
+
+    is_dng = (s->tiff_type == TIFF_TYPE_DNG || s->tiff_type == TIFF_TYPE_CINEMADNG);
+
     for (i = 0; i<s->geotag_count; i++) {
         const char *keyname = get_geokey_name(s->geotags[i].key);
         if (!keyname) {
@@ -1860,10 +1865,22 @@ again:
         }
     }
 
+    if (is_dng) {
+        if (s->white_level == 0)
+            s->white_level = (1 << s->bpp) - 1; /* Default value as per the spec */
+
+        if (s->white_level <= s->black_level) {
+            av_log(avctx, AV_LOG_ERROR, "BlackLevel (%"PRId32") must be less than WhiteLevel (%"PRId32")\n",
+                s->black_level, s->white_level);
+            return AVERROR_INVALIDDATA;
+        }
+    }
+
     if (!s->is_tiled && !s->strippos && !s->stripoff) {
         av_log(avctx, AV_LOG_ERROR, "Image data is missing\n");
         return AVERROR_INVALIDDATA;
     }
+
     /* now we have the data and may start decoding */
     if ((ret = init_image(s, &frame)) < 0)
         return ret;
@@ -1895,7 +1912,7 @@ again:
 
     /* Handle DNG images with JPEG-compressed tiles */
 
-    if ((s->tiff_type == TIFF_TYPE_DNG || s->tiff_type == TIFF_TYPE_CINEMADNG) && s->is_tiled) {
+    if (is_dng && s->is_tiled) {
         if (!s->is_jpeg) {
             avpriv_report_missing_feature(avctx, "DNG uncompressed tiled images");
             return AVERROR_PATCHWELCOME;
@@ -2053,8 +2070,7 @@ again:
         FFSWAP(int,      p->linesize[0], p->linesize[1]);
     }
 
-    if (s->is_bayer && s->white_level && s->bpp == 16 &&
-        !(s->tiff_type == TIFF_TYPE_DNG || s->tiff_type == TIFF_TYPE_CINEMADNG)) {
+    if (s->is_bayer && s->white_level && s->bpp == 16 && !is_dng) {
         uint16_t *dst = (uint16_t *)p->data[0];
         for (i = 0; i < s->height; i++) {
             for (j = 0; j < s->width; j++)
